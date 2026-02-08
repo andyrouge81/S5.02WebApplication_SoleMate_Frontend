@@ -1,7 +1,17 @@
-import { getToken } from "./auth";
-import type { AuthResponse, Foot, Review } from "./types";
+import { clearToken, getToken } from "./auth";
+import type { AuthResponse, CurrentUser, Foot, Review } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+
+export class ApiHttpError extends Error {
+  status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiHttpError";
+    this.status = status;
+  }
+}
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = typeof window !== "undefined" ? getToken() : null;
@@ -34,7 +44,18 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const message =
       messageFromPayload ??
       (typeof data === "string" ? data : "Error en la petición");
-    throw new Error(message);
+
+    if (res.status === 401 && typeof window !== "undefined") {
+      clearToken();
+      const onAuthPage = window.location.pathname.startsWith("/login")
+        || window.location.pathname.startsWith("/register");
+
+      if (!onAuthPage) {
+        window.location.href = "/login?reason=session-expired";
+      }
+    }
+
+    throw new ApiHttpError(res.status, message);
   }
 
   return data as T;
@@ -53,6 +74,8 @@ export const registerApi = (username: string, email: string, password: string) =
     body: JSON.stringify({ username, email, password }),
   });
 
+export const getCurrentUserApi = () => request<CurrentUser>("/auth/me");
+
 // Feet
 export const getFeetApi = () => request<Foot[]>("/feet");
 
@@ -64,6 +87,11 @@ export const createFootApi = (data: {
   request<Foot>("/feet", {
     method: "POST",
     body: JSON.stringify(data),
+  });
+
+export const deleteFootApi = (footId: string | number) =>
+  request<void>(`/feet/${footId}`, {
+    method: "DELETE",
   });
 
 export const getFootByIdApi = async (id: string | number) => {
@@ -83,3 +111,9 @@ export const createReviewApi = (
     method: "POST",
     body: JSON.stringify(data),
   });
+
+export const deleteReviewApi = (reviewId: string | number) =>
+  request<void>(`/feet/reviews/${reviewId}`, {
+    method: "DELETE",
+  });
+  

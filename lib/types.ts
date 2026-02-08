@@ -1,5 +1,11 @@
 export type AuthResponse = { token: string };
 
+export type CurrentUser = {
+  id: number;
+  username: string;
+  role: "ROLE_USER" | "ROLE_ADMIN";
+};
+
 export type Foot = {
   id: number;
   nickname: string;
@@ -16,4 +22,3 @@ export type Review = {
   reviewUsername: string;
   createdAt: string;
 };
-
