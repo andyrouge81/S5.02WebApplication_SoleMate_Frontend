@@ -36,7 +36,7 @@ export default function RegisterPage() {
 
   return (
     <main
-      className="relative min-h-screen flex items-start justify-center bg-cover bg-center px-4 pt-44 pb-36 md:pt-52 md:pb-44"
+      className="relative min-h-screen flex items-start justify-center bg-cover bg-center bg-no-repeat px-4 pt-44 pb-44 md:pt-52 md:pb-52"
       style={{ backgroundImage: "url('/images/ui/backgroud-login2.png')" }}
     >
       <section
@@ -98,7 +98,7 @@ export default function RegisterPage() {
         </div>
       </section>
 
-      <div className="pointer-events-none absolute -bottom-44 left-1/2 -translate-x-1/2">
+      <div className="pointer-events-none absolute bottom-10 md:-bottom-[230px] left-1/2 -translate-x-1/2">
         <Image
           src="/images/ui/logo-feet.png"
           alt="Logo Feet"

@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { createReviewApi, getCurrentUserApi, getFootByIdApi, getReviewsByFootApi } from "@/lib/api";
+import {
+  createReviewApi,
+  deleteReviewApi,
+  getCurrentUserApi,
+  getFootByIdApi,
+  getReviewsByFootApi,
+  updateReviewApi,
+} from "@/lib/api";
 import type { CurrentUser, Foot, Review } from "@/lib/types";
 import RightSidebar from "@/components/RightSidebar";
 
@@ -19,6 +26,12 @@ export default function FootDetailPage() {
 
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
+  const [editingReview, setEditingReview] = useState<Review | null>(null);
+  const [editRating, setEditRating] = useState(5);
+  const [editComment, setEditComment] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [deletingReviewId, setDeletingReviewId] = useState<number | null>(null);
+  const [pendingDeleteReviewId, setPendingDeleteReviewId] = useState<number | null>(null);
 
   const loadData = async () => {
     if (!footId) return;
@@ -58,6 +71,57 @@ export default function FootDetailPage() {
       await loadData();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error creando review");
+    }
+  };
+
+  const openEditReview = (review: Review) => {
+    setEditingReview(review);
+    setEditRating(review.rateAspect);
+    setEditComment(review.comment);
+  };
+
+  const closeEditReview = () => {
+    if (savingEdit) return;
+    setEditingReview(null);
+    setEditRating(5);
+    setEditComment("");
+  };
+
+  const onUpdateReview = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingReview) return;
+
+    setError("");
+    setSavingEdit(true);
+    try {
+      await updateReviewApi(editingReview.id, {
+        rateAspect: editRating,
+        comment: editComment,
+      });
+      await loadData();
+      closeEditReview();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error actualizando review");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const onDeleteReview = async () => {
+    const reviewId = pendingDeleteReviewId;
+    if (!reviewId) return;
+    if (currentUser?.role !== "ROLE_ADMIN") return;
+
+    setError("");
+    setDeletingReviewId(reviewId);
+    try {
+      await deleteReviewApi(reviewId);
+      await loadData();
+      setPendingDeleteReviewId(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error eliminando review");
+    } finally {
+      setDeletingReviewId(null);
     }
   };
 
@@ -103,11 +167,11 @@ export default function FootDetailPage() {
             <section className="overflow-hidden rounded-xl border-4 border-amber-200 bg-[#fffaf0] shadow-[0_18px_20px_rgba(180,80,30,0.40)]">
               <img
                 src={foot.imageUrl}
-                alt={foot.nickname}
+                alt={foot.title}
                 className="mx-auto w-full max-h-[70vh] object-contain bg-white"
               />
               <div className="p-4 space-y-1">
-                <h1 className="text-2xl font-bold">{foot.nickname}</h1>
+                <h1 className="text-2xl font-bold">{foot.title}</h1>
                 <p className="text-amber-900">Arco: {foot.archType}</p>
                 <p className="text-amber-900">Owner: {foot.ownerUsername}</p>
               </div>
@@ -146,6 +210,25 @@ export default function FootDetailPage() {
                 <p className="font-semibold text-amber-900">⭐ {r.rateAspect}/5</p>
                 <p>{r.comment}</p>
                 <p className="text-sm text-gray-500">por {r.reviewUsername}</p>
+                {currentUser?.username === r.reviewUsername && (
+                  <button
+                    type="button"
+                    onClick={() => openEditReview(r)}
+                    className="mt-2 rounded bg-amber-700 px-3 py-2 text-xs text-white hover:bg-amber-800"
+                  >
+                    Editar
+                  </button>
+                )}
+                {currentUser?.role === "ROLE_ADMIN" && (
+                  <button
+                    type="button"
+                    onClick={() => setPendingDeleteReviewId(r.id)}
+                    disabled={deletingReviewId === r.id}
+                    className="ml-2 mt-2 rounded border border-red-300 px-3 py-2 text-xs text-red-700 hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {deletingReviewId === r.id ? "Eliminando..." : "Eliminar review"}
+                  </button>
+                )}
               </article>
             ))}
           </section>
@@ -154,6 +237,79 @@ export default function FootDetailPage() {
           <RightSidebar currentUser={currentUser} />
         </div>
       </div>
+
+      {editingReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-xl border border-amber-200 bg-[#fffaf0] p-5 shadow-xl">
+            <h2 className="text-xl font-semibold text-amber-950">Editar review</h2>
+            <p className="mt-1 text-sm text-amber-900">Review #{editingReview.id}</p>
+
+            <form onSubmit={onUpdateReview} className="mt-4 space-y-3">
+              <input
+                className="w-full rounded border border-amber-300 bg-[#fffdf7]/80 p-2"
+                type="number"
+                min={1}
+                max={5}
+                value={editRating}
+                onChange={(e) => setEditRating(Number(e.target.value))}
+                required
+              />
+              <textarea
+                className="w-full rounded border border-amber-300 bg-[#fffdf7]/80 p-2"
+                value={editComment}
+                onChange={(e) => setEditComment(e.target.value)}
+                required
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeEditReview}
+                  disabled={savingEdit}
+                  className="rounded border border-amber-300 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingEdit}
+                  className="rounded bg-amber-700 px-3 py-2 text-sm text-white hover:bg-amber-800 disabled:opacity-60"
+                >
+                  {savingEdit ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteReviewId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-xl border border-amber-200 bg-[#fffaf0] p-5 shadow-xl">
+            <h2 className="text-xl font-semibold text-amber-950">Eliminar review</h2>
+            <p className="mt-1 text-sm text-amber-900">
+              Vas a eliminar una review del feed. Esta acción no se puede deshacer.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteReviewId(null)}
+                disabled={deletingReviewId === pendingDeleteReviewId}
+                className="rounded border border-amber-300 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={onDeleteReview}
+                disabled={deletingReviewId === pendingDeleteReviewId}
+                className="rounded border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
+              >
+                {deletingReviewId === pendingDeleteReviewId ? "Eliminando..." : "Sí, eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

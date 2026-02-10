@@ -31,7 +31,7 @@ export default function FeetPage() {
   const [error, setError] = useState("");
   const [deletingFootId, setDeletingFootId] = useState<number | null>(null);
 
-  const [nickname, setNickname] = useState("");
+  const [title, setTitle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState("");
@@ -170,8 +170,8 @@ export default function FeetPage() {
     e.preventDefault();
     setError("");
     try {
-      await createFootApi({ nickname, imageUrl, archType });
-      setNickname("");
+      await createFootApi({ title, imageUrl, archType });
+      setTitle("");
       setImageUrl("");
       setSelectedFileName("");
       setArchType("PES_PLANUS");
@@ -276,9 +276,9 @@ export default function FeetPage() {
                    key={f.id}
                    className="overflow-hidden rounded-xl border border-amber-300 bg-[#fffaf0]/70 backdrop-blur-[1px] shadow-[0_14px_22px_rgba(140,90,20,0.30)]"
                  >
-                     <img src={f.imageUrl} alt={f.nickname} className="w-full h-44 object-cover" />
+                     <img src={f.imageUrl} alt={f.title} className="w-full h-44 object-cover" />
                      <div className="p-3 space-y-2">
-                        <h3 className="font-semibold">{f.nickname}</h3>
+                        <h3 className="font-semibold">{f.title}</h3>
                         <p className="text-sm text-amber-900">Arco: {f.archType}</p>
                         <p className="text-sm text-amber-900">Owner: {f.ownerUsername}</p>
 
@@ -322,9 +322,9 @@ export default function FeetPage() {
                 <form onSubmit={onCreate} className="space-y-2">
                 <input
                   className="w-full rounded border border-amber-300 bg-[#fffdf7]/80 p-2 text-sm"
-                  placeholder="Nickname"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="Titulo"
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
                   required
                 />
                 <input

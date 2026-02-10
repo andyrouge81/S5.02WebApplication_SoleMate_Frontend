@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { clearToken } from "@/lib/auth";
 import type { CurrentUser } from "@/lib/types";
@@ -66,12 +67,25 @@ export default function RightSidebar({ currentUser, stats, children }: RightSide
           </div>
         )}
 
+        {currentUser?.role === "ROLE_ADMIN" && (
+          <Link
+            href="/admin/users"
+            className="inline-flex w-full items-center justify-center rounded border border-amber-700 bg-amber-700 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-800"
+          >
+            Panel Admin
+          </Link>
+        )}
+
         {stats && (
           <section className="rounded-lg border border-amber-300 bg-[#fff8e8] p-3 text-sm text-amber-950">
             <h3 className="mb-2 text-sm font-semibold">Estadisticas</h3>
             <div className="space-y-1">
-              <p>Total pies: <span className="font-semibold">{stats.totalFeet}</span></p>
-              <p>Total reviews: <span className="font-semibold">{stats.totalReviews}</span></p>
+              {currentUser?.role === "ROLE_ADMIN" && (
+                <>
+                  <p>Total pies: <span className="font-semibold">{stats.totalFeet}</span></p>
+                  <p>Total reviews: <span className="font-semibold">{stats.totalReviews}</span></p>
+                </>
+              )}
               <p>Tus pies: <span className="font-semibold">{stats.myFeet}</span></p>
               <p>Tus reviews: <span className="font-semibold">{stats.myReviews}</span></p>
               <p>Tu media: <span className="font-semibold">{stats.myAverageRating.toFixed(1)}</span></p>

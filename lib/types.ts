@@ -8,7 +8,7 @@ export type CurrentUser = {
 
 export type Foot = {
   id: number;
-  nickname: string;
+  title: string;
   imageUrl: string;
   archType: "PES_PLANUS" | "PES_RECTUS" | "PES_CAVUS";
   ownerUsername: string;
@@ -21,4 +21,20 @@ export type Review = {
   rateAspect: number;
   reviewUsername: string;
   createdAt: string;
+};
+
+export type AdminUser = {
+  id: number;
+  username: string;
+  email: string;
+  role: "ROLE_USER" | "ROLE_ADMIN";
+  createdAt: string;
+};
+
+export type PageResponse<T> = {
+  content: T[];
+  totalPages: number;
+  totalElements: number;
+  size: number;
+  number: number;
 };

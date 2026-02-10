@@ -1,5 +1,12 @@
 import { clearToken, getToken } from "./auth";
-import type { AuthResponse, CurrentUser, Foot, Review } from "./types";
+import type {
+  AdminUser,
+  AuthResponse,
+  CurrentUser,
+  Foot,
+  PageResponse,
+  Review,
+} from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 
@@ -80,7 +87,7 @@ export const getCurrentUserApi = () => request<CurrentUser>("/auth/me");
 export const getFeetApi = () => request<Foot[]>("/feet");
 
 export const createFootApi = (data: {
-  nickname: string;
+  title: string;
   imageUrl: string;
   archType: "PES_PLANUS" | "PES_RECTUS" | "PES_CAVUS";
 }) =>
@@ -112,8 +119,52 @@ export const createReviewApi = (
     body: JSON.stringify(data),
   });
 
+export const updateReviewApi = (
+  reviewId: string | number,
+  data: { rateAspect: number; comment: string }
+) =>
+  request<Review>(`/feet/reviews/${reviewId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
 export const deleteReviewApi = (reviewId: string | number) =>
   request<void>(`/feet/reviews/${reviewId}`, {
     method: "DELETE",
   });
-  
+
+// Admin
+export const getAdminUsersApi = (params?: {
+  page?: number;
+  size?: number;
+  search?: string;
+}) => {
+  const page = params?.page ?? 0;
+  const size = params?.size ?? 10;
+  const search = params?.search?.trim();
+
+  const query = new URLSearchParams({
+    page: String(page),
+    size: String(size),
+  });
+
+  if (search) {
+    query.set("search", search);
+  }
+
+  return request<PageResponse<AdminUser>>(`/admin/users?${query.toString()}`);
+};
+
+export const updateAdminUserApi = (
+  userId: string | number,
+  data: { email: string; role: "ROLE_USER" | "ROLE_ADMIN" }
+) =>
+  request<AdminUser>(`/admin/users/${userId}`, {
+    method: "PUT",
+    body: JSON.stringify(data),
+  });
+
+export const deleteAdminUserApi = (userId: string | number) =>
+  request<void>(`/admin/users/${userId}`, {
+    method: "DELETE",
+  });
