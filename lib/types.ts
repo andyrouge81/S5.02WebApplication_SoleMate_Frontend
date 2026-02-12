@@ -1,3 +1,6 @@
+export type ArchType = "PES_PLANUS" | "PES_RECTUS" | "PES_CAVUS";
+export type SwipeAction = "LIKE" | "DISLIKE";
+
 export type AuthResponse = { token: string };
 
 export type CurrentUser = {
@@ -10,7 +13,7 @@ export type Foot = {
   id: number;
   title: string;
   imageUrl: string;
-  archType: "PES_PLANUS" | "PES_RECTUS" | "PES_CAVUS";
+  archType: ArchType;
   ownerUsername: string;
   createdAt: string;
 };
@@ -37,4 +40,16 @@ export type PageResponse<T> = {
   totalElements: number;
   size: number;
   number: number;
+};
+
+export type Swipe = {
+  footId: number;
+  action: SwipeAction;
+  createdAt: string;
+};
+
+export type MinigameLibraryResponse = {
+  folders: string[];
+  selectedFolder: string | null;
+  images: string[];
 };

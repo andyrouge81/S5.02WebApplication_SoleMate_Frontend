@@ -1,11 +1,15 @@
 import { clearToken, getToken } from "./auth";
 import type {
   AdminUser,
+  ArchType,
   AuthResponse,
   CurrentUser,
   Foot,
+  MinigameLibraryResponse,
   PageResponse,
   Review,
+  Swipe,
+  SwipeAction,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
@@ -89,7 +93,7 @@ export const getFeetApi = () => request<Foot[]>("/feet");
 export const createFootApi = (data: {
   title: string;
   imageUrl: string;
-  archType: "PES_PLANUS" | "PES_RECTUS" | "PES_CAVUS";
+  archType: ArchType;
 }) =>
   request<Foot>("/feet", {
     method: "POST",
@@ -132,6 +136,27 @@ export const deleteReviewApi = (reviewId: string | number) =>
   request<void>(`/feet/reviews/${reviewId}`, {
     method: "DELETE",
   });
+
+// Swipes
+export const saveFootSwipeApi = (
+  footId: string | number,
+  action: SwipeAction
+) =>
+  request<Swipe>(`/feet/${footId}/swipe`, {
+    method: "POST",
+    body: JSON.stringify({ action }),
+  });
+
+export const getMySwipesApi = () => request<Swipe[]>("/feet/swipes/me");
+
+export const getMinigameLibraryApi = async (folder?: string) => {
+  const query = folder ? `?folder=${encodeURIComponent(folder)}` : "";
+  const res = await fetch(`/api/minigame/library${query}`);
+  if (!res.ok) {
+    throw new Error("No se pudo cargar la librería del minijuego");
+  }
+  return (await res.json()) as MinigameLibraryResponse;
+};
 
 // Admin
 export const getAdminUsersApi = (params?: {

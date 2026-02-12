@@ -108,6 +108,10 @@ export default function RegisterPage() {
           priority
         />
       </div>
+
+      <p className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded bg-[#fffaf0]/55 px-3 py-1 text-center text-[11px] text-amber-900 backdrop-blur-[1px]">
+        © 2026 SoleMate · Proyecto académico de ItAcademy · Solo para fines educativos.
+      </p>
     </main>
   );
 }

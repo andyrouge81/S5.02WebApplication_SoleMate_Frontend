@@ -7,6 +7,18 @@ import { useRouter } from "next/navigation";
 import { loginApi } from "@/lib/api";
 import { saveToken } from "@/lib/auth";
 
+function toFriendlyLoginError(message: string) {
+  const normalized = message.toLowerCase();
+  if (
+    normalized.includes("invalid credentials")
+    || normalized.includes("bad credentials")
+    || normalized.includes("credenciales")
+  ) {
+    return "Usuario o contraseña incorrectos. Comprueba tus datos o regístrate si aún no tienes cuenta.";
+  }
+  return message;
+}
+
 export default function LoginPage() {
   const router = useRouter();
 
@@ -41,7 +53,7 @@ export default function LoginPage() {
     } catch (err) {
       const message =
         err instanceof Error ? err.message : "No se pudo iniciar sesión";
-      setError(message);
+      setError(toFriendlyLoginError(message));
       setShowError(true);
     } finally {
       setLoading(false);
@@ -50,7 +62,7 @@ export default function LoginPage() {
 
   return (
     <main
-      className="relative min-h-screen flex items-start justify-center bg-cover bg-center bg-no-repeat px-4 pt-44 pb-44 md:pt-52 md:pb-52"
+      className="relative min-h-screen overflow-hidden flex items-start justify-center bg-cover bg-center bg-no-repeat px-4 pt-44 pb-44 md:pt-52 md:pb-52"
       style={{ backgroundImage: "url('/images/ui/backgroud-login2.png')" }}
     >
       <section
@@ -87,10 +99,9 @@ export default function LoginPage() {
           </form>
 
           {showError && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            <div className="rounded-lg border border-red-200 bg-red-50/70 p-3 text-sm text-red-700 backdrop-blur-[1px]">
               <p className="font-semibold">No pudimos iniciar sesión</p>
               <p>{error}</p>
-              <p className="mt-1 text-xs">Revisa usuario/contraseña o regístrate.</p>
             </div>
           )}
 
@@ -113,6 +124,10 @@ export default function LoginPage() {
           priority
         />
       </div>
+
+      <p className="pointer-events-none absolute bottom-3 left-1/2 -translate-x-1/2 rounded bg-[#fffaf0]/55 px-3 py-1 text-center text-[11px] text-amber-900 backdrop-blur-[1px]">
+        © 2026 SoleMate · Proyecto académico de ItAcademy · Solo para fines educativos.
+      </p>
     </main>
   );
 }

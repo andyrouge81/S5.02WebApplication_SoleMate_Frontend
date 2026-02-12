@@ -14,13 +14,28 @@ type SidebarStats = {
   myAverageRating: number;
 };
 
+type MiniGameSidebarStats = {
+  like: number;
+  dislike: number;
+};
+
 type RightSidebarProps = {
   currentUser: CurrentUser | null;
   stats?: SidebarStats;
+  miniGameStats?: MiniGameSidebarStats;
   children?: ReactNode;
+  showAdminLink?: boolean;
+  showMinigameButton?: boolean;
 };
 
-export default function RightSidebar({ currentUser, stats, children }: RightSidebarProps) {
+export default function RightSidebar({
+  currentUser,
+  stats,
+  miniGameStats,
+  children,
+  showAdminLink = true,
+  showMinigameButton = true,
+}: RightSidebarProps) {
   const router = useRouter();
 
   const onLogout = () => {
@@ -30,7 +45,7 @@ export default function RightSidebar({ currentUser, stats, children }: RightSide
   };
 
   return (
-    <aside className="h-full border-l border-amber-200 bg-[#f5e7c9] px-5 py-6">
+    <aside className="flex h-full flex-col border-l border-amber-200 bg-[#f5e7c9] px-5 py-6">
       <div className="space-y-6">
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-xl font-bold text-amber-950">
@@ -67,7 +82,7 @@ export default function RightSidebar({ currentUser, stats, children }: RightSide
           </div>
         )}
 
-        {currentUser?.role === "ROLE_ADMIN" && (
+        {showAdminLink && currentUser?.role === "ROLE_ADMIN" && (
           <Link
             href="/admin/users"
             className="inline-flex w-full items-center justify-center rounded border border-amber-700 bg-amber-700 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-800"
@@ -89,12 +104,27 @@ export default function RightSidebar({ currentUser, stats, children }: RightSide
               <p>Tus pies: <span className="font-semibold">{stats.myFeet}</span></p>
               <p>Tus reviews: <span className="font-semibold">{stats.myReviews}</span></p>
               <p>Tu media: <span className="font-semibold">{stats.myAverageRating.toFixed(1)}</span></p>
+              {miniGameStats && (
+                <>
+                  <hr className="my-2 border-amber-200" />
+                  <p>LIKE: <span className="font-semibold">{miniGameStats.like}</span></p>
+                  <p>DISLIKE: <span className="font-semibold">{miniGameStats.dislike}</span></p>
+                </>
+              )}
             </div>
           </section>
         )}
 
         {children}
       </div>
+      {showMinigameButton && (
+        <Link
+          href="/feet/game"
+          className="mt-auto inline-flex w-full items-center justify-center rounded border border-amber-400 bg-[#fffaf0]/70 px-3 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+        >
+          MiniFeetGame
+        </Link>
+      )}
     </aside>
   );
 }

@@ -8,14 +8,32 @@ import {
   deleteReviewApi,
   getCurrentUserApi,
   getFeetApi,
+  getMinigameLibraryApi,
   getReviewsByFootApi,
 } from "@/lib/api";
-import type { CurrentUser, Foot, Review } from "@/lib/types";
+import { ARCH_TYPE_LABELS, getArchTypeLabel } from "@/lib/archType";
+import type { ArchType, CurrentUser, Foot, Review } from "@/lib/types";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Image from "next/image";
 import RightSidebar from "@/components/RightSidebar";
 
+const MINIGAME_STATS_TTL_MS = 24 * 60 * 60 * 1000;
+
+type MiniGameStats = {
+  likes: number;
+  dislikes: number;
+  resetAt: number;
+};
+
+const buildFreshMiniGameStats = (): MiniGameStats => ({
+  likes: 0,
+  dislikes: 0,
+  resetAt: Date.now() + MINIGAME_STATS_TTL_MS,
+});
+
 export default function FeetPage() {
+  const router = useRouter();
   const [stats, setStats] = useState({
     totalFeet: 0,
     totalReviews: 0,
@@ -29,13 +47,22 @@ export default function FeetPage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [duplicatePopupMessage, setDuplicatePopupMessage] = useState("");
+  const [duplicateFootId, setDuplicateFootId] = useState<number | null>(null);
   const [deletingFootId, setDeletingFootId] = useState<number | null>(null);
+  const [pendingDeleteFootId, setPendingDeleteFootId] = useState<number | null>(null);
+  const [showMiniGameModal, setShowMiniGameModal] = useState(false);
+  const [miniGameImages, setMiniGameImages] = useState<string[]>([]);
+  const [miniGameIndex, setMiniGameIndex] = useState(0);
+  const [miniGameStats, setMiniGameStats] = useState<MiniGameStats>(buildFreshMiniGameStats);
+  const [miniGameLoading, setMiniGameLoading] = useState(false);
+  const [miniGameError, setMiniGameError] = useState("");
 
   const [title, setTitle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [uploadingImage, setUploadingImage] = useState(false);
   const [selectedFileName, setSelectedFileName] = useState("");
-  const [archType, setArchType] = useState<"PES_PLANUS" | "PES_RECTUS" | "PES_CAVUS">("PES_RECTUS");
+  const [archType, setArchType] = useState<ArchType>("PES_RECTUS");
 
   const loadLatestReviews = useCallback(async (feetSource?: Foot[], username?: string) => {
     setLoadingReviews(true);
@@ -166,6 +193,44 @@ export default function FeetPage() {
     return () => window.clearInterval(intervalId);
   }, [loadLatestReviews, currentUser?.username]);
 
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const storageKey = `solemate:minigame-stats:${currentUser.id}`;
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) {
+      const fresh = buildFreshMiniGameStats();
+      setMiniGameStats(fresh);
+      window.localStorage.setItem(storageKey, JSON.stringify(fresh));
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw) as Partial<MiniGameStats>;
+      if (
+        typeof parsed.likes !== "number"
+        || typeof parsed.dislikes !== "number"
+        || typeof parsed.resetAt !== "number"
+        || Date.now() >= parsed.resetAt
+      ) {
+        const fresh = buildFreshMiniGameStats();
+        setMiniGameStats(fresh);
+        window.localStorage.setItem(storageKey, JSON.stringify(fresh));
+        return;
+      }
+
+      setMiniGameStats({
+        likes: parsed.likes,
+        dislikes: parsed.dislikes,
+        resetAt: parsed.resetAt,
+      });
+    } catch {
+      const fresh = buildFreshMiniGameStats();
+      setMiniGameStats(fresh);
+      window.localStorage.setItem(storageKey, JSON.stringify(fresh));
+    }
+  }, [currentUser]);
+
   const onCreate = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
@@ -187,6 +252,16 @@ export default function FeetPage() {
         );
         return;
       }
+
+      if (err instanceof ApiHttpError && err.status === 409) {
+        const duplicateIdMatch = err.message.match(/(\d+)/);
+        setDuplicateFootId(duplicateIdMatch ? Number(duplicateIdMatch[1]) : null);
+        setDuplicatePopupMessage(
+          "Ese pie ya existe en el listado. Entra en esa publicación y añade una review."
+        );
+        return;
+      }
+
       setError(err instanceof Error ? err.message : "Error creando foot");
     }
   };
@@ -197,14 +272,15 @@ export default function FeetPage() {
     return currentUser.username === foot.ownerUsername;
   };
 
-  const onDeleteFoot = async (footId: number) => {
-    if (!window.confirm("¿Seguro que quieres eliminar este foot?")) return;
-
+  const onDeleteFoot = async () => {
+    const footId = pendingDeleteFootId;
+    if (!footId) return;
     setError("");
     setDeletingFootId(footId);
     try {
       await deleteFootApi(footId);
       await loadData();
+      setPendingDeleteFootId(null);
     } catch (err) {
       if (currentUser?.role === "ROLE_ADMIN") {
         try {
@@ -212,6 +288,7 @@ export default function FeetPage() {
           await Promise.all(reviews.map((review) => deleteReviewApi(review.id)));
           await deleteFootApi(footId);
           await loadData();
+          setPendingDeleteFootId(null);
           return;
         } catch {
           // Si falla el fallback, mostramos el error original.
@@ -228,13 +305,61 @@ export default function FeetPage() {
     }
   };
 
+  const loadMiniGame = useCallback(async () => {
+    setMiniGameLoading(true);
+    setMiniGameError("");
+    try {
+      const data = await getMinigameLibraryApi();
+      setMiniGameImages(data.images);
+      setMiniGameIndex(0);
+    } catch (err) {
+      setMiniGameError(err instanceof Error ? err.message : "No se pudo cargar el minijuego");
+    } finally {
+      setMiniGameLoading(false);
+    }
+  }, []);
+
+  const openMiniGameModal = async () => {
+    setShowMiniGameModal(true);
+    await loadMiniGame();
+  };
+
+  const onMiniGameSwipe = (action: "like" | "dislike") => {
+    const currentImage = miniGameImages[miniGameIndex] ?? null;
+    if (!currentImage) return;
+
+    setMiniGameStats((prev) => {
+      const expired = Date.now() >= prev.resetAt;
+      const base = expired ? buildFreshMiniGameStats() : prev;
+      const next = {
+        ...base,
+        likes: action === "like" ? base.likes + 1 : base.likes,
+        dislikes: action === "dislike" ? base.dislikes + 1 : base.dislikes,
+      };
+      if (currentUser) {
+        const storageKey = `solemate:minigame-stats:${currentUser.id}`;
+        window.localStorage.setItem(storageKey, JSON.stringify(next));
+      }
+      return next;
+    });
+
+    setMiniGameIndex((prev) => prev + 1);
+  };
+
+  const miniGameTotal = miniGameImages.length;
+  const miniGameFinished = miniGameTotal > 0 && miniGameIndex >= miniGameTotal;
+  const miniGameCurrentImage = miniGameImages[miniGameIndex] ?? null;
+  const miniGameProgress = miniGameTotal
+    ? `${Math.min(miniGameIndex + 1, miniGameTotal)}/${miniGameTotal}`
+    : "0/0";
+
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-fixed"
+      className="min-h-screen bg-cover bg-center bg-fixed md:h-screen md:overflow-hidden"
       style={{ backgroundImage: "url('/images/ui/backgroud-login2.png')" }}
     >
-      <div className="mx-auto grid max-w-[1500px] grid-cols-1 items-stretch lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <aside className="order-2 h-full border-b border-amber-200 bg-[#f8edd3] p-4 lg:order-1 lg:border-b-0 lg:border-r">
+      <div className="mx-auto grid max-w-[1500px] grid-cols-1 items-stretch md:h-full md:grid-cols-[280px_minmax(0,1fr)_320px]">
+        <aside className="order-2 h-full border-b border-amber-200 bg-[#f8edd3] p-4 md:order-1 md:h-screen md:sticky md:top-0 md:overflow-y-auto md:border-b-0 md:border-r">
           <h3 className="text-lg font-semibold text-amber-950">Ultimas reviews</h3>
           <div className="mt-4 space-y-3">
             {loadingReviews && <p className="text-sm text-amber-900">Actualizando...</p>}
@@ -252,7 +377,7 @@ export default function FeetPage() {
           </div>
         </aside>
 
-        <main className="order-1 space-y-3 px-6 pb-6 pt-0 lg:order-2">
+        <main className="order-1 space-y-3 px-6 pb-6 pt-0 md:order-2 md:h-screen md:overflow-y-auto">
           <section className="-mt-22 md:-mt-30">
             <Image
               src="/images/ui/logo-feet.png"
@@ -279,7 +404,7 @@ export default function FeetPage() {
                      <img src={f.imageUrl} alt={f.title} className="w-full h-44 object-cover" />
                      <div className="p-3 space-y-2">
                         <h3 className="font-semibold">{f.title}</h3>
-                        <p className="text-sm text-amber-900">Arco: {f.archType}</p>
+                        <p className="text-sm text-amber-900">Arco: {getArchTypeLabel(f.archType)}</p>
                         <p className="text-sm text-amber-900">Owner: {f.ownerUsername}</p>
 
                         <Link
@@ -291,7 +416,7 @@ export default function FeetPage() {
                         {canDeleteFoot(f) && (
                           <button
                             type="button"
-                            onClick={() => onDeleteFoot(f.id)}
+                            onClick={() => setPendingDeleteFootId(f.id)}
                             disabled={deletingFootId === f.id}
                             className="ml-2 inline-block rounded border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
                           >
@@ -305,8 +430,17 @@ export default function FeetPage() {
             </div>
           </section>
         </main>
-        <div className="order-3 h-full w-full lg:w-[320px]">
-          <RightSidebar currentUser={currentUser} stats={stats}>
+        <div className="order-3 h-full w-full md:sticky md:top-0 md:h-screen md:w-[320px] md:overflow-y-auto">
+          <RightSidebar
+            currentUser={currentUser}
+            stats={stats}
+            miniGameStats={
+              currentUser?.role === "ROLE_ADMIN"
+                ? undefined
+                : { like: miniGameStats.likes, dislike: miniGameStats.dislikes }
+            }
+            showMinigameButton={false}
+          >
             <section
               className="rounded-xl border border-amber-300 bg-cover bg-center p-3 shadow-sm"
               style={{ backgroundImage: "url('/images/ui/backgroud-card-feet.png')" }}
@@ -353,15 +487,15 @@ export default function FeetPage() {
                   className="w-full rounded border border-amber-300 bg-[#fffdf7]/80 p-2 text-sm"
                   value={archType}
                   onChange={(e) =>
-                    setArchType(
-                      e.target.value as "PES_PLANUS" | "PES_RECTUS" | "PES_CAVUS"
-                    )
+                    setArchType(e.target.value as ArchType)
                   }
                   required
                 >
-                  <option value="PES_PLANUS">PES_PLANUS</option>
-                  <option value="PES_RECTUS">PES_RECTUS</option>
-                  <option value="PES_CAVUS">PES_CAVUS</option>
+                  {Object.entries(ARCH_TYPE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
                 </select>
                 <button className="w-full rounded bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800">
                   Crear
@@ -369,9 +503,173 @@ export default function FeetPage() {
                 </form>
               </div>
             </section>
+            {currentUser?.role !== "ROLE_ADMIN" && (
+              <button
+                type="button"
+                onClick={openMiniGameModal}
+                className="inline-flex w-full items-center justify-center rounded border border-amber-700 bg-amber-700 px-4 py-3 text-base font-semibold text-white shadow-sm hover:bg-amber-800"
+              >
+                MiniFeetGame
+              </button>
+            )}
           </RightSidebar>
         </div>
       </div>
+
+      {duplicatePopupMessage && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-amber-200 bg-[#fffaf0] p-5 shadow-xl">
+            <h2 className="text-xl font-semibold text-amber-950">Pie duplicado</h2>
+            <p className="mt-2 text-sm text-amber-900">{duplicatePopupMessage}</p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setDuplicatePopupMessage("");
+                  setDuplicateFootId(null);
+                }}
+                className="rounded border border-amber-300 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100"
+              >
+                Cerrar
+              </button>
+              {duplicateFootId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    router.push(`/feet/${duplicateFootId}`);
+                    setDuplicatePopupMessage("");
+                    setDuplicateFootId(null);
+                  }}
+                  className="rounded bg-amber-700 px-3 py-2 text-sm text-white hover:bg-amber-800"
+                >
+                  Ir al pie existente
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteFootId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-amber-200 bg-[#fffaf0] p-5 shadow-xl">
+            <h2 className="text-xl font-semibold text-amber-950">Eliminar pie</h2>
+            <p className="mt-2 text-sm text-amber-900">
+              Vas a eliminar este pie del listado. Esta acción no se puede deshacer.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteFootId(null)}
+                disabled={deletingFootId === pendingDeleteFootId}
+                className="rounded border border-amber-300 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={onDeleteFoot}
+                disabled={deletingFootId === pendingDeleteFootId}
+                className="rounded border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
+              >
+                {deletingFootId === pendingDeleteFootId ? "Eliminando..." : "Sí, eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showMiniGameModal && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/55 p-4">
+          <div className="relative w-full max-w-3xl rounded-2xl border border-amber-200 bg-[#fffaf0] p-5 shadow-2xl">
+            <button
+              type="button"
+              onClick={() => setShowMiniGameModal(false)}
+              className="absolute right-4 top-4 rounded border border-amber-300 px-2 py-1 text-xs text-amber-900 hover:bg-amber-100"
+            >
+              Cerrar
+            </button>
+
+            <h2 className="text-2xl font-bold text-amber-950">MiniFeetGame</h2>
+            <p className="mt-1 text-sm text-amber-900">
+              Juega sin salir de la pantalla de Feet.
+            </p>
+            <p className="mt-1 text-sm text-amber-900">
+              Progreso: <span className="font-semibold">{miniGameProgress}</span>
+            </p>
+
+            <div className="mt-4">
+              <section className="rounded-xl border border-amber-200 bg-[#fffaf0]/60 p-4">
+                {miniGameLoading && <p className="text-amber-900">Cargando minijuego...</p>}
+                {miniGameError && <p className="text-red-600">{miniGameError}</p>}
+
+                {!miniGameLoading && !miniGameError && miniGameTotal === 0 && (
+                  <p className="text-amber-900">No hay imágenes para jugar.</p>
+                )}
+
+                {!miniGameLoading && !miniGameError && miniGameCurrentImage && !miniGameFinished && (
+                  <>
+                    <div className="overflow-hidden rounded-xl border border-amber-200 bg-white">
+                      <img
+                        src={miniGameCurrentImage}
+                        alt="Carta del minijuego"
+                        className="h-[320px] w-full object-contain"
+                      />
+                    </div>
+                    <div className="mt-5 flex items-end justify-center gap-5">
+                      <button
+                        type="button"
+                        onClick={() => onMiniGameSwipe("dislike")}
+                        className="flex h-28 w-28 flex-col items-center justify-center gap-1 overflow-hidden rounded-full border-2 border-amber-400 bg-[#fffaf0]/80 shadow-sm transition hover:scale-[1.03] hover:bg-amber-100"
+                      >
+                        <Image
+                          src="/images/ui/dislike_button_v2.png"
+                          alt="Descartar"
+                          width={108}
+                          height={108}
+                          className="h-[4.75rem] w-[4.75rem] object-contain"
+                        />
+                        <span className="text-[10px] font-bold tracking-wide text-amber-900">DISLIKE</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onMiniGameSwipe("like")}
+                        className="flex h-28 w-28 flex-col items-center justify-center gap-1 overflow-hidden rounded-full border-2 border-amber-400 bg-[#fffaf0]/80 shadow-sm transition hover:scale-[1.03] hover:bg-amber-100"
+                      >
+                        <Image
+                          src="/images/ui/like_buton.png"
+                          alt="Me gusta"
+                          width={108}
+                          height={108}
+                          className="h-[4.75rem] w-[4.75rem] object-contain"
+                        />
+                        <span className="text-[10px] font-bold tracking-wide text-amber-900">LIKE</span>
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {!miniGameLoading && !miniGameError && miniGameFinished && (
+                  <div className="rounded-xl border border-amber-200 bg-[#fffaf0]/70 p-4 text-center">
+                    <p className="text-lg font-semibold text-amber-950">Fin del juego</p>
+                    <p className="mt-2 text-sm text-amber-900">
+                      LIKE: <span className="font-semibold">{miniGameStats.likes}</span> · DISLIKE:{" "}
+                      <span className="font-semibold">{miniGameStats.dislikes}</span>
+                    </p>
+                    <button
+                      type="button"
+                      onClick={loadMiniGame}
+                      className="mt-3 rounded bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800"
+                    >
+                      Jugar de nuevo
+                    </button>
+                  </div>
+                )}
+              </section>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

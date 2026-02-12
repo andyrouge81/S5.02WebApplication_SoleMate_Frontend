@@ -11,6 +11,7 @@ import {
   getReviewsByFootApi,
   updateReviewApi,
 } from "@/lib/api";
+import { getArchTypeLabel } from "@/lib/archType";
 import type { CurrentUser, Foot, Review } from "@/lib/types";
 import RightSidebar from "@/components/RightSidebar";
 
@@ -32,6 +33,7 @@ export default function FootDetailPage() {
   const [savingEdit, setSavingEdit] = useState(false);
   const [deletingReviewId, setDeletingReviewId] = useState<number | null>(null);
   const [pendingDeleteReviewId, setPendingDeleteReviewId] = useState<number | null>(null);
+  const [friendlyPopupMessage, setFriendlyPopupMessage] = useState("");
 
   const loadData = async () => {
     if (!footId) return;
@@ -70,7 +72,12 @@ export default function FootDetailPage() {
       setRating(5);
       await loadData();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error creando review");
+      const message = err instanceof Error ? err.message : "Error creando review";
+      if (message.toLowerCase().includes("already review this foot")) {
+        setFriendlyPopupMessage("Ya tienes una review en este foot. Solo puedes publicar una review por pie, pero puedes editar la que ya hiciste.");
+        return;
+      }
+      setError(message);
     }
   };
 
@@ -128,14 +135,14 @@ export default function FootDetailPage() {
   if (loading) {
     return (
       <div
-        className="min-h-screen bg-cover bg-center bg-fixed"
+        className="min-h-screen bg-cover bg-center bg-fixed md:h-screen md:overflow-hidden"
         style={{ backgroundImage: "url('/images/ui/backgroud-login2.png')" }}
       >
-        <div className="mx-auto grid max-w-[1500px] grid-cols-1 items-stretch lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-          <aside className="hidden lg:block" />
-          <main className="order-1 p-6 lg:order-2">Cargando...</main>
-          <div className="order-3 h-full w-full lg:w-[320px]">
-            <RightSidebar currentUser={currentUser} />
+        <div className="mx-auto grid max-w-[1500px] grid-cols-1 items-stretch md:h-full md:grid-cols-[280px_minmax(0,1fr)_320px]">
+          <aside className="hidden md:block" />
+          <main className="order-1 p-6 md:order-2 md:h-screen md:overflow-y-auto">Cargando...</main>
+          <div className="order-3 h-full w-full md:sticky md:top-0 md:h-screen md:w-[320px] md:overflow-y-auto">
+            <RightSidebar currentUser={currentUser} showMinigameButton={false} />
           </div>
         </div>
       </div>
@@ -144,12 +151,12 @@ export default function FootDetailPage() {
 
   return (
     <div
-      className="min-h-screen bg-cover bg-center bg-fixed"
+      className="min-h-screen bg-cover bg-center bg-fixed md:h-screen md:overflow-hidden"
       style={{ backgroundImage: "url('/images/ui/backgroud-login2.png')" }}
     >
-      <div className="mx-auto grid max-w-[1500px] grid-cols-1 items-stretch lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <aside className="hidden lg:block" />
-        <main className="order-1 w-full max-w-4xl mx-auto p-6 space-y-6 lg:order-2">
+      <div className="mx-auto grid max-w-[1500px] grid-cols-1 items-stretch md:h-full md:grid-cols-[280px_minmax(0,1fr)_320px]">
+        <aside className="hidden md:block" />
+        <main className="order-1 w-full max-w-4xl mx-auto p-6 space-y-6 md:order-2 md:h-screen md:overflow-y-auto">
           <div>
             <Link
               href="/feet"
@@ -172,7 +179,7 @@ export default function FootDetailPage() {
               />
               <div className="p-4 space-y-1">
                 <h1 className="text-2xl font-bold">{foot.title}</h1>
-                <p className="text-amber-900">Arco: {foot.archType}</p>
+                <p className="text-amber-900">Arco: {getArchTypeLabel(foot.archType)}</p>
                 <p className="text-amber-900">Owner: {foot.ownerUsername}</p>
               </div>
             </section>
@@ -233,8 +240,8 @@ export default function FootDetailPage() {
             ))}
           </section>
         </main>
-        <div className="order-3 h-full w-full lg:w-[320px]">
-          <RightSidebar currentUser={currentUser} />
+        <div className="order-3 h-full w-full md:sticky md:top-0 md:h-screen md:w-[320px] md:overflow-y-auto">
+          <RightSidebar currentUser={currentUser} showMinigameButton={false} />
         </div>
       </div>
 
@@ -305,6 +312,24 @@ export default function FootDetailPage() {
                 className="rounded border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
               >
                 {deletingReviewId === pendingDeleteReviewId ? "Eliminando..." : "Sí, eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {friendlyPopupMessage && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-amber-200 bg-[#fffaf0] p-5 shadow-xl">
+            <h2 className="text-xl font-semibold text-amber-950">Ya tienes una reseña</h2>
+            <p className="mt-2 text-sm text-amber-900">{friendlyPopupMessage}</p>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setFriendlyPopupMessage("")}
+                className="rounded bg-amber-700 px-4 py-2 text-sm text-white hover:bg-amber-800"
+              >
+                Entendido
               </button>
             </div>
           </div>
