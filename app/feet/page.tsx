@@ -493,7 +493,7 @@ export default function FeetPage() {
             />
           </section>
 
-          <section className="-mt-40 md:-mt-52 rounded-xl border border-amber-200 bg-[#fffaf0]/35 p-6 backdrop-blur-[1px] shadow-sm">
+          <section className="-mt-40 md:-mt-52 rounded-xl border border-amber-200 bg-[#fffaf0]/35 p-6 backdrop-blur-[1px] shadow-[0_18px_22px_rgba(140,90,20,0.28)]">
             <h2 className="text-xl font-semibold mb-3">Listado</h2>
             {loading && <p>Cargando...</p>}
             {error && <p className="text-red-600">{error}</p>}
@@ -503,7 +503,7 @@ export default function FeetPage() {
               {feet.map((f) => (
                 <article
                    key={f.id}
-                   className="overflow-hidden rounded-xl border border-amber-300 bg-[#fffaf0]/70 backdrop-blur-[1px] shadow-[0_14px_22px_rgba(140,90,20,0.30)]"
+                 className="overflow-hidden rounded-xl border border-amber-300 bg-[#fffaf0]/70 backdrop-blur-[1px] shadow-[0_18px_26px_rgba(140,90,20,0.34)]"
                  >
                      <img src={f.imageUrl} alt={f.title} className="w-full h-44 object-cover" />
                      <div className="p-3 space-y-2">
@@ -690,7 +690,7 @@ export default function FeetPage() {
                   </div>
                 </section>
 
-                <section className="rounded-xl border border-amber-200 bg-[#fffaf0]/50 p-4 shadow-sm">
+                <section className="rounded-xl border border-amber-200 bg-[#fffaf0]/50 p-4 shadow-[0_18px_20px_rgba(180,80,30,0.30)]">
                   <h3 className="mb-3 text-lg font-semibold text-amber-950">Pon un comentario</h3>
                   <form onSubmit={onCreateDetailReview} className="space-y-3">
                     <input
@@ -714,7 +714,7 @@ export default function FeetPage() {
                   </form>
                 </section>
 
-                <section className="space-y-3 rounded-xl border border-amber-200 bg-[#fffaf0]/50 p-4 shadow-sm">
+                <section className="space-y-3 rounded-xl border border-amber-200 bg-[#fffaf0]/50 p-4 shadow-[0_18px_20px_rgba(180,80,30,0.30)]">
                   <h3 className="text-lg font-semibold text-amber-950">Reviews</h3>
                   {!detailReviews.length && <p className="text-amber-900">No hay reviews todavía.</p>}
                   {detailReviews.map((review) => (
