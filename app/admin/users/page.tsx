@@ -44,6 +44,7 @@ export default function AdminUsersPage() {
   const [deletingUserId, setDeletingUserId] = useState<number | null>(null);
   const [pendingDeleteUser, setPendingDeleteUser] = useState<AdminUser | null>(null);
   const [deletingReviewId, setDeletingReviewId] = useState<number | null>(null);
+  const [pendingDeleteReview, setPendingDeleteReview] = useState<(Review & { footId: number }) | null>(null);
   const [error, setError] = useState("");
 
   const loadUsers = useCallback(
@@ -201,14 +202,15 @@ export default function AdminUsersPage() {
     }
   };
 
-  const onDeleteReview = async (reviewId: number) => {
-    if (!window.confirm("¿Eliminar esta review?")) return;
-
+  const onDeleteReview = async () => {
+    const review = pendingDeleteReview;
+    if (!review) return;
     setError("");
-    setDeletingReviewId(reviewId);
+    setDeletingReviewId(review.id);
     try {
-      await deleteReviewApi(reviewId);
+      await deleteReviewApi(review.id);
       await loadLatestReviews();
+      setPendingDeleteReview(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "No se pudo eliminar la review");
     } finally {
@@ -270,7 +272,7 @@ export default function AdminUsersPage() {
                 <p className="mt-1 text-amber-950">{review.comment}</p>
                 <button
                   type="button"
-                  onClick={() => onDeleteReview(review.id)}
+                  onClick={() => setPendingDeleteReview(review)}
                   disabled={deletingReviewId === review.id}
                   className="mt-2 rounded border border-red-300 px-2 py-1 text-xs text-red-700 hover:bg-red-50 disabled:opacity-60"
                 >
@@ -516,6 +518,36 @@ export default function AdminUsersPage() {
                 className="rounded border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
               >
                 {deletingUserId === pendingDeleteUser.id ? "Eliminando..." : "Sí, eliminar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingDeleteReview && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-xl border border-amber-200 bg-[#fffaf0] p-5 shadow-xl">
+            <h2 className="text-xl font-semibold text-amber-950">Eliminar review</h2>
+            <p className="mt-2 text-sm text-amber-900">
+              Vas a eliminar una review de <span className="font-semibold">{pendingDeleteReview.reviewUsername}</span>.
+              Esta acción no se puede deshacer.
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDeleteReview(null)}
+                disabled={deletingReviewId === pendingDeleteReview.id}
+                className="rounded border border-amber-300 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={onDeleteReview}
+                disabled={deletingReviewId === pendingDeleteReview.id}
+                className="rounded border border-red-300 px-3 py-2 text-sm text-red-700 hover:bg-red-50 disabled:opacity-60"
+              >
+                {deletingReviewId === pendingDeleteReview.id ? "Eliminando..." : "Sí, eliminar"}
               </button>
             </div>
           </div>

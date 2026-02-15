@@ -3,18 +3,19 @@
 import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from "react";
 import {
   ApiHttpError,
+  createReviewApi,
   createFootApi,
   deleteFootApi,
   deleteReviewApi,
   getCurrentUserApi,
+  getFootByIdApi,
   getFeetApi,
   getMinigameLibraryApi,
   getReviewsByFootApi,
+  updateReviewApi,
 } from "@/lib/api";
 import { ARCH_TYPE_LABELS, getArchTypeLabel } from "@/lib/archType";
 import type { ArchType, CurrentUser, Foot, Review } from "@/lib/types";
-import Link from "next/link";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import RightSidebar from "@/components/RightSidebar";
 
@@ -33,7 +34,6 @@ const buildFreshMiniGameStats = (): MiniGameStats => ({
 });
 
 export default function FeetPage() {
-  const router = useRouter();
   const [stats, setStats] = useState({
     totalFeet: 0,
     totalReviews: 0,
@@ -57,6 +57,18 @@ export default function FeetPage() {
   const [miniGameStats, setMiniGameStats] = useState<MiniGameStats>(buildFreshMiniGameStats);
   const [miniGameLoading, setMiniGameLoading] = useState(false);
   const [miniGameError, setMiniGameError] = useState("");
+  const [showFootDetailModal, setShowFootDetailModal] = useState(false);
+  const [detailFoot, setDetailFoot] = useState<Foot | null>(null);
+  const [detailReviews, setDetailReviews] = useState<Review[]>([]);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+  const [detailRating, setDetailRating] = useState(5);
+  const [detailComment, setDetailComment] = useState("");
+  const [detailFriendlyPopupMessage, setDetailFriendlyPopupMessage] = useState("");
+  const [editingDetailReview, setEditingDetailReview] = useState<Review | null>(null);
+  const [editDetailRating, setEditDetailRating] = useState(5);
+  const [editDetailComment, setEditDetailComment] = useState("");
+  const [savingDetailEdit, setSavingDetailEdit] = useState(false);
 
   const [title, setTitle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
@@ -324,6 +336,98 @@ export default function FeetPage() {
     await loadMiniGame();
   };
 
+  const loadFootDetailData = useCallback(async (footId: number) => {
+    setDetailLoading(true);
+    setDetailError("");
+    try {
+      const [footData, reviewData] = await Promise.all([
+        getFootByIdApi(String(footId)),
+        getReviewsByFootApi(footId),
+      ]);
+      setDetailFoot(footData);
+      setDetailReviews(reviewData);
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "No se pudo cargar el detalle");
+    } finally {
+      setDetailLoading(false);
+    }
+  }, []);
+
+  const openFootDetailModal = async (footId: number) => {
+    setShowFootDetailModal(true);
+    setDetailComment("");
+    setDetailRating(5);
+    setDetailFriendlyPopupMessage("");
+    setEditingDetailReview(null);
+    await loadFootDetailData(footId);
+  };
+
+  const closeFootDetailModal = () => {
+    if (savingDetailEdit) return;
+    setShowFootDetailModal(false);
+    setDetailFoot(null);
+    setDetailReviews([]);
+    setDetailError("");
+    setDetailComment("");
+    setDetailRating(5);
+    setDetailFriendlyPopupMessage("");
+    setEditingDetailReview(null);
+  };
+
+  const onCreateDetailReview = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!detailFoot) return;
+    setDetailError("");
+    try {
+      await createReviewApi(detailFoot.id, { rateAspect: detailRating, comment: detailComment });
+      setDetailComment("");
+      setDetailRating(5);
+      await Promise.all([loadFootDetailData(detailFoot.id), loadLatestReviews()]);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Error creando review";
+      if (message.toLowerCase().includes("already review this foot")) {
+        setDetailFriendlyPopupMessage(
+          "Ya tienes una review en este pie. Solo puedes publicar una review por pie, pero puedes editar la que ya hiciste."
+        );
+        return;
+      }
+      setDetailError(message);
+    }
+  };
+
+  const openEditDetailReview = (review: Review) => {
+    setEditingDetailReview(review);
+    setEditDetailRating(review.rateAspect);
+    setEditDetailComment(review.comment);
+  };
+
+  const closeEditDetailReview = () => {
+    if (savingDetailEdit) return;
+    setEditingDetailReview(null);
+    setEditDetailRating(5);
+    setEditDetailComment("");
+  };
+
+  const onUpdateDetailReview = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editingDetailReview || !detailFoot) return;
+    setDetailError("");
+    setSavingDetailEdit(true);
+    try {
+      await updateReviewApi(editingDetailReview.id, {
+        rateAspect: editDetailRating,
+        comment: editDetailComment,
+      });
+      await Promise.all([loadFootDetailData(detailFoot.id), loadLatestReviews()]);
+      closeEditDetailReview();
+    } catch (err) {
+      setDetailError(err instanceof Error ? err.message : "Error actualizando review");
+    } finally {
+      setSavingDetailEdit(false);
+    }
+  };
+
+
   const onMiniGameSwipe = (action: "like" | "dislike") => {
     const currentImage = miniGameImages[miniGameIndex] ?? null;
     if (!currentImage) return;
@@ -407,12 +511,13 @@ export default function FeetPage() {
                         <p className="text-sm text-amber-900">Arco: {getArchTypeLabel(f.archType)}</p>
                         <p className="text-sm text-amber-900">Owner: {f.ownerUsername}</p>
 
-                        <Link
-                            href={`/feet/${f.id}`}
-                            className="inline-block rounded bg-amber-700 px-3 py-2 text-sm text-white hover:bg-amber-800"
+                        <button
+                          type="button"
+                          onClick={() => openFootDetailModal(f.id)}
+                          className="inline-block rounded bg-amber-700 px-3 py-2 text-sm text-white hover:bg-amber-800"
                         >
-                            Ver detalle
-                        </Link>
+                          Ver detalle
+                        </button>
                         {canDeleteFoot(f) && (
                           <button
                             type="button"
@@ -535,8 +640,8 @@ export default function FeetPage() {
               {duplicateFootId && (
                 <button
                   type="button"
-                  onClick={() => {
-                    router.push(`/feet/${duplicateFootId}`);
+                  onClick={async () => {
+                    await openFootDetailModal(duplicateFootId);
                     setDuplicatePopupMessage("");
                     setDuplicateFootId(null);
                   }}
@@ -546,6 +651,153 @@ export default function FeetPage() {
                 </button>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {showFootDetailModal && (
+        <div className="fixed inset-0 z-[65] flex items-center justify-center bg-black/55 p-3 md:p-4">
+          <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-amber-200 bg-[#fffaf0] shadow-2xl md:max-h-[92vh]">
+            <div className="flex items-center border-b border-amber-200 bg-[#fff8ea] px-4 py-3">
+              <button
+                type="button"
+                onClick={closeFootDetailModal}
+                className="rounded border border-amber-300 bg-[#fffaf0]/80 px-3 py-1.5 text-xs text-amber-900 hover:bg-amber-100"
+              >
+                ← Volver a Feet
+              </button>
+            </div>
+
+            <div className="max-h-[calc(92vh-60px)] overflow-y-auto p-4 md:p-5">
+              <h2 className="text-2xl font-bold text-amber-950">Detalle del pie</h2>
+              <p className="mt-1 text-sm text-amber-900">Consulta y publica reviews sin salir de Feet.</p>
+
+              {detailLoading && <p className="mt-4 text-amber-900">Cargando detalle...</p>}
+              {detailError && <p className="mt-4 text-red-600">{detailError}</p>}
+
+              {!detailLoading && detailFoot && (
+                <div className="mt-4 space-y-5">
+                <section className="overflow-hidden rounded-xl border-4 border-amber-200 bg-[#fffaf0] shadow-[0_18px_20px_rgba(180,80,30,0.30)]">
+                  <img
+                    src={detailFoot.imageUrl}
+                    alt={detailFoot.title}
+                    className="mx-auto max-h-[42vh] w-full object-contain bg-white"
+                  />
+                  <div className="p-4 space-y-1">
+                    <h3 className="text-xl font-bold">{detailFoot.title}</h3>
+                    <p className="text-amber-900">Arco: {getArchTypeLabel(detailFoot.archType)}</p>
+                    <p className="text-amber-900">Owner: {detailFoot.ownerUsername}</p>
+                  </div>
+                </section>
+
+                <section className="rounded-xl border border-amber-200 bg-[#fffaf0]/50 p-4 shadow-sm">
+                  <h3 className="mb-3 text-lg font-semibold text-amber-950">Pon un comentario</h3>
+                  <form onSubmit={onCreateDetailReview} className="space-y-3">
+                    <input
+                      className="w-full rounded border border-amber-300 bg-[#fffdf7]/80 p-2"
+                      type="number"
+                      min={1}
+                      max={5}
+                      value={detailRating}
+                      onChange={(e) => setDetailRating(Number(e.target.value))}
+                    />
+                    <textarea
+                      className="w-full rounded border border-amber-300 bg-[#fffdf7]/80 p-2"
+                      placeholder="Tu comentario"
+                      value={detailComment}
+                      onChange={(e) => setDetailComment(e.target.value)}
+                      required
+                    />
+                    <button className="rounded bg-amber-700 px-4 py-2 text-white hover:bg-amber-800">
+                      Publicar review
+                    </button>
+                  </form>
+                </section>
+
+                <section className="space-y-3 rounded-xl border border-amber-200 bg-[#fffaf0]/50 p-4 shadow-sm">
+                  <h3 className="text-lg font-semibold text-amber-950">Reviews</h3>
+                  {!detailReviews.length && <p className="text-amber-900">No hay reviews todavía.</p>}
+                  {detailReviews.map((review) => (
+                    <article key={review.id} className="rounded-lg border border-amber-300 bg-[#fffdf7]/80 p-3">
+                      <p className="font-semibold text-amber-900">⭐ {review.rateAspect}/5</p>
+                      <p>{review.comment}</p>
+                      <p className="text-sm text-gray-500">por {review.reviewUsername}</p>
+                      {currentUser?.username === review.reviewUsername && (
+                        <button
+                          type="button"
+                          onClick={() => openEditDetailReview(review)}
+                          className="mt-2 rounded bg-amber-700 px-3 py-2 text-xs text-white hover:bg-amber-800"
+                        >
+                          Editar
+                        </button>
+                      )}
+                    </article>
+                  ))}
+                </section>
+              </div>
+            )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {detailFriendlyPopupMessage && (
+        <div className="fixed inset-0 z-[72] flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-xl border border-amber-200 bg-[#fffaf0] p-5 shadow-xl">
+            <h2 className="text-xl font-semibold text-amber-950">Review ya publicada</h2>
+            <p className="mt-2 text-sm text-amber-900">{detailFriendlyPopupMessage}</p>
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setDetailFriendlyPopupMessage("")}
+                className="rounded bg-amber-700 px-3 py-2 text-sm text-white hover:bg-amber-800"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingDetailReview && (
+        <div className="fixed inset-0 z-[72] flex items-center justify-center bg-black/45 p-4">
+          <div className="w-full max-w-md rounded-xl border border-amber-200 bg-[#fffaf0] p-5 shadow-xl">
+            <h2 className="text-xl font-semibold text-amber-950">Editar review</h2>
+            <p className="mt-1 text-sm text-amber-900">Review #{editingDetailReview.id}</p>
+            <form onSubmit={onUpdateDetailReview} className="mt-4 space-y-3">
+              <input
+                className="w-full rounded border border-amber-300 bg-[#fffdf7]/80 p-2"
+                type="number"
+                min={1}
+                max={5}
+                value={editDetailRating}
+                onChange={(e) => setEditDetailRating(Number(e.target.value))}
+                required
+              />
+              <textarea
+                className="w-full rounded border border-amber-300 bg-[#fffdf7]/80 p-2"
+                value={editDetailComment}
+                onChange={(e) => setEditDetailComment(e.target.value)}
+                required
+              />
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={closeEditDetailReview}
+                  disabled={savingDetailEdit}
+                  className="rounded border border-amber-300 px-3 py-2 text-sm text-amber-900 hover:bg-amber-100 disabled:opacity-60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingDetailEdit}
+                  className="rounded bg-amber-700 px-3 py-2 text-sm text-white hover:bg-amber-800 disabled:opacity-60"
+                >
+                  {savingDetailEdit ? "Guardando..." : "Guardar cambios"}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
